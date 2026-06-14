@@ -1,4 +1,4 @@
-const API_URL = '請貼上你的 Apps Script Web App URL';
+const API_URL = 'https://script.google.com/macros/s/AKfycbw1JL2wzHQ2jNvxumC-EGDEiXJvnK7Mj_NUX5qiuumaVfW5DivUjSkVENBaYYdYEJgI/exec';
 
 const state = {
   token: localStorage.getItem('shd_admin_token') || '',
