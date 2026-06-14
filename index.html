@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>省好多後台管理系統</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="loginPage" class="login-page">
+    <div class="login-card">
+      <div class="logo">🛒</div>
+      <h1>省好多後台</h1>
+      <p>訂單管理系統</p>
+
+      <input id="username" type="text" placeholder="帳號" />
+      <input id="password" type="password" placeholder="密碼" />
+
+      <button id="loginBtn">登入</button>
+      <div id="loginMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div id="adminPage" class="admin-page hidden">
+    <aside class="sidebar">
+      <h2>🛒 省好多</h2>
+      <p>後台管理系統</p>
+
+      <button class="nav active" data-status="全部">全部訂單</button>
+      <button class="nav" data-status="已下訂">新訂單</button>
+      <button class="nav" data-status="已聯繫客服">待聯繫</button>
+      <button class="nav" data-status="配送中">配送中</button>
+      <button class="nav" data-status="已完成">已完成</button>
+
+      <button id="logoutBtn" class="logout">登出</button>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>訂單管理</h1>
+          <p id="userInfo">即時查看與處理顧客訂單</p>
+        </div>
+        <button id="refreshBtn">重新整理</button>
+      </header>
+
+      <section class="stats">
+        <div><span>新訂單</span><strong id="statNew">0</strong></div>
+        <div><span>待聯繫</span><strong id="statContact">0</strong></div>
+        <div><span>配送中</span><strong id="statDelivery">0</strong></div>
+        <div><span>已完成</span><strong id="statDone">0</strong></div>
+      </section>
+
+      <section class="toolbar">
+        <input id="searchInput" type="text" placeholder="搜尋訂單編號 / 客人 / 電話 / 地址" />
+      </section>
+
+      <section id="ordersGrid" class="orders-grid"></section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
