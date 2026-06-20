@@ -4,8 +4,11 @@ const state = {
   token: localStorage.getItem('shd_admin_token') || '',
   user: JSON.parse(localStorage.getItem('shd_admin_user') || 'null'),
   orders: [],
+  ambassadors: [],
+  referralSummary: [],
   status: '全部',
-  keyword: ''
+  keyword: '',
+  tab: 'orders'
 };
 
 const $ = (id) => document.getElementById(id);
@@ -13,6 +16,7 @@ const money = (n) => `$${Number(n || 0).toLocaleString('zh-TW')}`;
 
 function toast(message) {
   const el = $('toast');
+  if (!el) return alert(message);
   el.textContent = message;
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 1800);
@@ -38,10 +42,12 @@ function showAdmin() {
   $('adminPage').classList.remove('hidden');
 
   if (state.user) {
-    $('userInfo').textContent = `${state.user.name || state.user.username}，即時查看與處理顧客訂單`;
+    $('userInfo').textContent =
+      `${state.user.name || state.user.username}，即時查看與處理顧客訂單`;
   }
 
-  loadOrders();
+  ensureAdminTabs();
+  switchTab('orders');
 }
 
 function showLogin() {
@@ -74,6 +80,159 @@ async function login() {
   }
 }
 
+function ensureAdminTabs() {
+  if ($('adminTabs')) return;
+
+  const tabHtml = document.createElement('div');
+  tabHtml.id = 'adminTabs';
+  tabHtml.className = 'admin-tabs';
+  tabHtml.style.cssText = `
+    display:flex;
+    gap:10px;
+    margin:18px 0;
+    flex-wrap:wrap;
+  `;
+
+  tabHtml.innerHTML = `
+    <button class="admin-tab active" data-tab="orders">訂單管理</button>
+    <button class="admin-tab" data-tab="ambassadors">分享家管理</button>
+    <button class="admin-tab" data-tab="summary">分享業績</button>
+  `;
+
+  const userInfo = $('userInfo');
+  if (userInfo && userInfo.parentNode) {
+    userInfo.parentNode.insertBefore(tabHtml, userInfo.nextSibling);
+  } else {
+    $('adminPage').prepend(tabHtml);
+  }
+
+  const style = document.createElement('style');
+  style.innerHTML = `
+    .admin-tab {
+      border: 1px solid #f1dfd1;
+      background: #fff;
+      color: #2f241f;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .admin-tab.active {
+      background: #ec7f32;
+      color: #fff;
+      border-color: #ec7f32;
+    }
+    .admin-card {
+      background: #fff;
+      border: 1px solid #f1dfd1;
+      border-radius: 18px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 8px 22px rgba(151,91,42,.08);
+    }
+    .admin-form {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(140px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .admin-form input {
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid #f1dfd1;
+      font: inherit;
+    }
+    .admin-form button {
+      border: 0;
+      border-radius: 12px;
+      background: #ec7f32;
+      color: #fff;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      overflow: hidden;
+      border-radius: 16px;
+    }
+    .admin-table th,
+    .admin-table td {
+      border-bottom: 1px solid #f1dfd1;
+      padding: 12px;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    .admin-table th {
+      color: #82736a;
+      background: #fff7ef;
+    }
+    .small-btn {
+      border: 1px solid #ec7f32;
+      background: #fff;
+      color: #ec7f32;
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    .small-btn.danger {
+      border-color: #999;
+      color: #666;
+    }
+    @media (max-width: 800px) {
+      .admin-form {
+        grid-template-columns: 1fr;
+      }
+      .admin-table {
+        display:block;
+        overflow-x:auto;
+        white-space:nowrap;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function setOrderToolsVisible(visible) {
+  ['searchInput', 'refreshBtn'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      const box = el.closest('.toolbar, .search-card, .filters, .topbar') || el;
+      box.style.display = visible ? '' : 'none';
+    }
+  });
+
+  document.querySelectorAll('.nav').forEach(btn => {
+    btn.style.display = visible ? '' : 'none';
+  });
+}
+
+function switchTab(tab) {
+  state.tab = tab;
+
+  document.querySelectorAll('.admin-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  if (tab === 'orders') {
+    setOrderToolsVisible(true);
+    loadOrders();
+  }
+
+  if (tab === 'ambassadors') {
+    setOrderToolsVisible(false);
+    loadAmbassadors();
+  }
+
+  if (tab === 'summary') {
+    setOrderToolsVisible(false);
+    loadReferralSummary();
+  }
+}
+
 async function loadOrders() {
   try {
     const data = await apiPost({
@@ -91,24 +250,37 @@ async function loadOrders() {
 }
 
 function renderStats() {
-  $('statNew').textContent = state.orders.filter(o => o.status === '已下訂').length;
-  $('statContact').textContent = state.orders.filter(o => o.status === '已聯繫客服').length;
-  $('statDelivery').textContent = state.orders.filter(o => o.status === '配送中').length;
-  $('statDone').textContent = state.orders.filter(o => o.status === '已完成').length;
+  if (!$('statNew')) return;
+
+  $('statNew').textContent =
+    state.orders.filter(o => o.status === '已下訂').length;
+
+  $('statContact').textContent =
+    state.orders.filter(o => o.status === '已聯繫客服').length;
+
+  $('statDelivery').textContent =
+    state.orders.filter(o => o.status === '配送中').length;
+
+  $('statDone').textContent =
+    state.orders.filter(o => o.status === '已完成').length;
 }
 
 function getFilteredOrders() {
   const kw = state.keyword.toLowerCase();
 
   return state.orders.filter(order => {
-    const matchStatus = state.status === '全部' || order.status === state.status;
+    const matchStatus =
+      state.status === '全部' ||
+      order.status === state.status;
 
     const text = [
       order.orderId,
       order.name,
       order.phone,
       order.address,
-      order.lineName
+      order.lineName,
+      order.couponCode,
+      order.ambassadorCode
     ].join(' ').toLowerCase();
 
     return matchStatus && (!kw || text.includes(kw));
@@ -132,7 +304,7 @@ function orderCard(order) {
     </div>
   `).join('');
 
-  const statuses = ['已下訂', '已聯繫客服', '配送中', '已完成'];
+  const statuses = ['已下訂', '已聯繫客服', '配送中', '已完成', '已取消'];
 
   const buttons = statuses.map(status => `
     <button
@@ -143,6 +315,16 @@ function orderCard(order) {
       ${status}
     </button>
   `).join('');
+
+  const discountHtml = order.couponCode
+    ? `
+      <div style="margin-top:10px;font-size:14px;color:#82736a;">
+        🎟 ${order.couponCode}
+        ${order.discountAmount ? `｜折扣 ${money(order.discountAmount)}` : ''}
+        ${order.ambassadorCode ? `｜分享家 ${order.ambassadorCode}` : ''}
+      </div>
+    `
+    : '';
 
   return `
     <article class="order-card">
@@ -171,8 +353,10 @@ function orderCard(order) {
 
       <div class="total">
         <span>總金額</span>
-        <strong>${money(order.total)}</strong>
+        <strong>${money(order.finalAmount || order.total)}</strong>
       </div>
+
+      ${discountHtml}
 
       <div class="actions">
         ${buttons}
@@ -201,6 +385,195 @@ async function updateStatus(orderId, status) {
   }
 }
 
+async function loadAmbassadors() {
+  try {
+    const data = await apiPost({
+      action: 'getAmbassadors',
+      token: state.token
+    });
+
+    state.ambassadors = data.ambassadors || [];
+    renderAmbassadors();
+  } catch (err) {
+    $('ordersGrid').innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderAmbassadors() {
+  const rows = state.ambassadors.map(a => `
+    <tr>
+      <td>${a.ambassadorCode || '-'}</td>
+      <td>${a.name || '-'}</td>
+      <td>${a.phone || '-'}</td>
+      <td>${a.couponCode || '-'}</td>
+      <td>${Number(a.rewardRate || 0.01)}</td>
+      <td>${String(a.active).toUpperCase() === 'TRUE' ? '啟用' : '停用'}</td>
+      <td>
+        <button
+          class="small-btn ${String(a.active).toUpperCase() === 'TRUE' ? 'danger' : ''}"
+          data-ambassador="${a.ambassadorCode}"
+          data-active="${String(a.active).toUpperCase() === 'TRUE' ? 'false' : 'true'}"
+        >
+          ${String(a.active).toUpperCase() === 'TRUE' ? '停用' : '啟用'}
+        </button>
+      </td>
+    </tr>
+  `).join('');
+
+  $('ordersGrid').innerHTML = `
+    <div class="admin-card">
+      <h2>新增分享家</h2>
+
+      <div class="admin-form">
+        <input id="ambName" placeholder="分享家姓名" />
+        <input id="ambPhone" placeholder="電話，例如 0912345678" />
+        <input id="ambCoupon" placeholder="折扣碼，例如 MING95" />
+        <input id="ambReward" placeholder="回饋比例，預設 0.01" />
+        <button id="createAmbBtn">新增分享家</button>
+      </div>
+
+      <p style="color:#82736a;font-size:14px;">
+        新增後會自動建立 share 編號，並同步新增一組 referral 95折優惠碼。
+      </p>
+    </div>
+
+    <div class="admin-card">
+      <h2>分享家清單</h2>
+
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>代碼</th>
+            <th>姓名</th>
+            <th>電話</th>
+            <th>折扣碼</th>
+            <th>回饋</th>
+            <th>狀態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || '<tr><td colspan="7">尚無分享家資料</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function createAmbassador() {
+  const name = $('ambName').value.trim();
+  const phone = $('ambPhone').value.trim();
+  const couponCode = $('ambCoupon').value.trim();
+  const rewardRate = $('ambReward').value.trim() || '0.01';
+
+  try {
+    const data = await apiPost({
+      action: 'createAmbassador',
+      token: state.token,
+      name,
+      phone,
+      couponCode,
+      rewardRate
+    });
+
+    toast(`已新增 ${data.name}｜${data.couponCode}`);
+    loadAmbassadors();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+async function updateAmbassadorStatus(ambassadorCode, active) {
+  try {
+    await apiPost({
+      action: 'updateAmbassadorStatus',
+      token: state.token,
+      ambassadorCode,
+      active
+    });
+
+    toast(active ? '已啟用分享家' : '已停用分享家');
+    loadAmbassadors();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+async function loadReferralSummary() {
+  try {
+    const data = await apiPost({
+      action: 'getReferralSummary',
+      token: state.token
+    });
+
+    state.referralSummary = data.summary || [];
+    renderReferralSummary();
+  } catch (err) {
+    $('ordersGrid').innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function renderReferralSummary() {
+  const totalOrders = state.referralSummary
+    .reduce((sum, row) => sum + Number(row.orderCount || 0), 0);
+
+  const totalAmount = state.referralSummary
+    .reduce((sum, row) => sum + Number(row.finalAmount || 0), 0);
+
+  const totalReward = state.referralSummary
+    .reduce((sum, row) => sum + Number(row.rewardAmount || 0), 0);
+
+  const rows = state.referralSummary.map(row => `
+    <tr>
+      <td>${row.ambassadorCode || '-'}</td>
+      <td>${row.name || '-'}</td>
+      <td>${row.phone || '-'}</td>
+      <td>${row.orderCount || 0}</td>
+      <td>${money(row.finalAmount || 0)}</td>
+      <td>${money(row.rewardAmount || 0)}</td>
+      <td>${row.rewardStatus || '未結算'}</td>
+    </tr>
+  `).join('');
+
+  $('ordersGrid').innerHTML = `
+    <div class="admin-card">
+      <h2>分享業績總覽</h2>
+
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;">
+        <div class="admin-card">
+          <div style="color:#82736a;">推薦訂單</div>
+          <strong style="font-size:26px;">${totalOrders}</strong>
+        </div>
+        <div class="admin-card">
+          <div style="color:#82736a;">推薦成交</div>
+          <strong style="font-size:26px;">${money(totalAmount)}</strong>
+        </div>
+        <div class="admin-card">
+          <div style="color:#82736a;">累積回饋</div>
+          <strong style="font-size:26px;">${money(totalReward)}</strong>
+        </div>
+      </div>
+
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>分享家代碼</th>
+            <th>姓名</th>
+            <th>電話</th>
+            <th>訂單數</th>
+            <th>成交金額</th>
+            <th>回饋金</th>
+            <th>狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows || '<tr><td colspan="7">尚無分享業績</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function logout() {
   localStorage.removeItem('shd_admin_token');
   localStorage.removeItem('shd_admin_user');
@@ -216,15 +589,40 @@ function bindEvents() {
     if (e.key === 'Enter') login();
   });
 
-  $('refreshBtn').addEventListener('click', loadOrders);
+  $('refreshBtn').addEventListener('click', () => {
+    if (state.tab === 'orders') loadOrders();
+    if (state.tab === 'ambassadors') loadAmbassadors();
+    if (state.tab === 'summary') loadReferralSummary();
+  });
+
   $('logoutBtn').addEventListener('click', logout);
 
   $('searchInput').addEventListener('input', e => {
     state.keyword = e.target.value;
-    renderOrders();
+    if (state.tab === 'orders') renderOrders();
   });
 
   document.body.addEventListener('click', e => {
+    const tab = e.target.dataset.tab;
+    if (tab) {
+      switchTab(tab);
+      return;
+    }
+
+    if (e.target.id === 'createAmbBtn') {
+      createAmbassador();
+      return;
+    }
+
+    const ambassadorCode = e.target.dataset.ambassador;
+    if (ambassadorCode) {
+      updateAmbassadorStatus(
+        ambassadorCode,
+        e.target.dataset.active === 'true'
+      );
+      return;
+    }
+
     const nav = e.target.dataset.status;
 
     if (nav && e.target.classList.contains('nav')) {
@@ -235,6 +633,7 @@ function bindEvents() {
       });
 
       renderOrders();
+      return;
     }
 
     const orderId = e.target.dataset.order;
