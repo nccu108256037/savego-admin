@@ -1,4 +1,4 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbyGU4MGrSzz6IYmXwstQ1xhBJTKtAzbczNP6AEzgwYA2BaN2iQ_2-s0b-dPabo86YAH/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxRkOVGRD_7RptPkfiZOkKaCI12rh9B51dSEdJ2Lcgob_Z71X5FYdnfQ9hSqFVZGmvs/exec';
 
 const state = {
   token: localStorage.getItem('shd_admin_token') || '',
