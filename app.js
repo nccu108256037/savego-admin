@@ -86,12 +86,6 @@ function ensureAdminTabs() {
   const tabHtml = document.createElement('div');
   tabHtml.id = 'adminTabs';
   tabHtml.className = 'admin-tabs';
-  tabHtml.style.cssText = `
-    display:flex;
-    gap:10px;
-    margin:18px 0;
-    flex-wrap:wrap;
-  `;
 
   tabHtml.innerHTML = `
     <button class="admin-tab active" data-tab="orders">訂單管理</button>
@@ -105,95 +99,6 @@ function ensureAdminTabs() {
   } else {
     $('adminPage').prepend(tabHtml);
   }
-
-  const style = document.createElement('style');
-  style.innerHTML = `
-    .admin-tab {
-      border: 1px solid #f1dfd1;
-      background: #fff;
-      color: #2f241f;
-      padding: 10px 16px;
-      border-radius: 999px;
-      font-weight: 900;
-      cursor: pointer;
-    }
-    .admin-tab.active {
-      background: #ec7f32;
-      color: #fff;
-      border-color: #ec7f32;
-    }
-    .admin-card {
-      background: #fff;
-      border: 1px solid #f1dfd1;
-      border-radius: 18px;
-      padding: 16px;
-      margin-bottom: 14px;
-      box-shadow: 0 8px 22px rgba(151,91,42,.08);
-    }
-    .admin-form {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(140px, 1fr));
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    .admin-form input {
-      padding: 12px;
-      border-radius: 12px;
-      border: 1px solid #f1dfd1;
-      font: inherit;
-    }
-    .admin-form button {
-      border: 0;
-      border-radius: 12px;
-      background: #ec7f32;
-      color: #fff;
-      font-weight: 900;
-      cursor: pointer;
-    }
-    .admin-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-      overflow: hidden;
-      border-radius: 16px;
-    }
-    .admin-table th,
-    .admin-table td {
-      border-bottom: 1px solid #f1dfd1;
-      padding: 12px;
-      text-align: left;
-      font-size: 14px;
-      vertical-align: top;
-    }
-    .admin-table th {
-      color: #82736a;
-      background: #fff7ef;
-    }
-    .small-btn {
-      border: 1px solid #ec7f32;
-      background: #fff;
-      color: #ec7f32;
-      border-radius: 999px;
-      padding: 7px 12px;
-      font-weight: 900;
-      cursor: pointer;
-    }
-    .small-btn.danger {
-      border-color: #999;
-      color: #666;
-    }
-    @media (max-width: 800px) {
-      .admin-form {
-        grid-template-columns: 1fr;
-      }
-      .admin-table {
-        display:block;
-        overflow-x:auto;
-        white-space:nowrap;
-      }
-    }
-  `;
-  document.head.appendChild(style);
 }
 
 function setOrderToolsVisible(visible) {
@@ -208,6 +113,9 @@ function setOrderToolsVisible(visible) {
   document.querySelectorAll('.nav').forEach(btn => {
     btn.style.display = visible ? '' : 'none';
   });
+
+  const stats = document.querySelector('.stats');
+  if (stats) stats.style.display = visible ? '' : 'none';
 }
 
 function switchTab(tab) {
@@ -399,22 +307,32 @@ async function loadAmbassadors() {
   }
 }
 
+function getCouponText(ambassador) {
+  if (ambassador.couponCode) return ambassador.couponCode;
+
+  if (Array.isArray(ambassador.coupons) && ambassador.coupons.length) {
+    return ambassador.coupons.map(c => c.code).join('、');
+  }
+
+  return '-';
+}
+
 function renderAmbassadors() {
   const rows = state.ambassadors.map(a => `
     <tr>
       <td>${a.ambassadorCode || '-'}</td>
       <td>${a.name || '-'}</td>
       <td>${a.phone || '-'}</td>
-      <td>${a.couponCode || '-'}</td>
+      <td><strong>${getCouponText(a)}</strong></td>
       <td>${Number(a.rewardRate || 0.01)}</td>
-      <td>${String(a.active).toUpperCase() === 'TRUE' ? '啟用' : '停用'}</td>
+      <td>${String(a.active).toUpperCase() === 'TRUE' || a.active === true ? '啟用' : '停用'}</td>
       <td>
         <button
-          class="small-btn ${String(a.active).toUpperCase() === 'TRUE' ? 'danger' : ''}"
+          class="small-btn ${String(a.active).toUpperCase() === 'TRUE' || a.active === true ? 'danger' : ''}"
           data-ambassador="${a.ambassadorCode}"
-          data-active="${String(a.active).toUpperCase() === 'TRUE' ? 'false' : 'true'}"
+          data-active="${String(a.active).toUpperCase() === 'TRUE' || a.active === true ? 'false' : 'true'}"
         >
-          ${String(a.active).toUpperCase() === 'TRUE' ? '停用' : '啟用'}
+          ${String(a.active).toUpperCase() === 'TRUE' || a.active === true ? '停用' : '啟用'}
         </button>
       </td>
     </tr>
@@ -425,15 +343,14 @@ function renderAmbassadors() {
       <h2>新增分享家</h2>
 
       <div class="admin-form">
-        <input id="ambName" placeholder="分享家姓名" />
+        <input id="ambName" placeholder="分享家姓名，例如 張軒睿" />
         <input id="ambPhone" placeholder="電話，例如 0912345678" />
-        <input id="ambCoupon" placeholder="折扣碼，例如 MING95" />
         <input id="ambReward" placeholder="回饋比例，預設 0.01" />
         <button id="createAmbBtn">新增分享家</button>
       </div>
 
       <p style="color:#82736a;font-size:14px;">
-        新增後會自動建立 share 編號，並同步新增一組 referral 95折優惠碼。
+        新增後會自動建立 share 編號，並自動產生英文推薦碼，例如 XR52、XF31、AM84。
       </p>
     </div>
 
@@ -443,10 +360,10 @@ function renderAmbassadors() {
       <table class="admin-table">
         <thead>
           <tr>
-            <th>代碼</th>
+            <th>系統代碼</th>
             <th>姓名</th>
             <th>電話</th>
-            <th>折扣碼</th>
+            <th>推薦碼</th>
             <th>回饋</th>
             <th>狀態</th>
             <th>操作</th>
@@ -463,8 +380,17 @@ function renderAmbassadors() {
 async function createAmbassador() {
   const name = $('ambName').value.trim();
   const phone = $('ambPhone').value.trim();
-  const couponCode = $('ambCoupon').value.trim();
   const rewardRate = $('ambReward').value.trim() || '0.01';
+
+  if (!name) {
+    toast('請輸入分享家姓名');
+    return;
+  }
+
+  if (!phone) {
+    toast('請輸入電話');
+    return;
+  }
 
   try {
     const data = await apiPost({
@@ -472,11 +398,15 @@ async function createAmbassador() {
       token: state.token,
       name,
       phone,
-      couponCode,
       rewardRate
     });
 
-    toast(`已新增 ${data.name}｜${data.couponCode}`);
+    toast(`已新增 ${data.name}｜推薦碼 ${data.couponCode}`);
+
+    $('ambName').value = '';
+    $('ambPhone').value = '';
+    $('ambReward').value = '';
+
     loadAmbassadors();
   } catch (err) {
     toast(err.message);
@@ -531,7 +461,8 @@ function renderReferralSummary() {
       <td>${row.orderCount || 0}</td>
       <td>${money(row.finalAmount || 0)}</td>
       <td>${money(row.rewardAmount || 0)}</td>
-      <td>${row.rewardStatus || '未結算'}</td>
+      <td>${money(row.unsettledReward || 0)}</td>
+      <td>${money(row.settledReward || 0)}</td>
     </tr>
   `).join('');
 
@@ -562,12 +493,13 @@ function renderReferralSummary() {
             <th>電話</th>
             <th>訂單數</th>
             <th>成交金額</th>
-            <th>回饋金</th>
-            <th>狀態</th>
+            <th>總回饋</th>
+            <th>未結算</th>
+            <th>已結算</th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="7">尚無分享業績</td></tr>'}
+          ${rows || '<tr><td colspan="8">尚無分享業績</td></tr>'}
         </tbody>
       </table>
     </div>
