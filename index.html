@@ -6,6 +6,7 @@
   <title>省好多後台管理系統</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <div id="loginPage" class="login-page">
     <div class="login-card">
@@ -39,17 +40,33 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <h1>訂單管理</h1>
+          <h1>省好多管理後台</h1>
           <p id="userInfo">即時查看與處理顧客訂單</p>
         </div>
+
         <button id="refreshBtn">重新整理</button>
       </header>
 
       <section class="stats">
-        <div><span>新訂單</span><strong id="statNew">0</strong></div>
-        <div><span>待聯繫</span><strong id="statContact">0</strong></div>
-        <div><span>配送中</span><strong id="statDelivery">0</strong></div>
-        <div><span>已完成</span><strong id="statDone">0</strong></div>
+        <div>
+          <span>新訂單</span>
+          <strong id="statNew">0</strong>
+        </div>
+
+        <div>
+          <span>待聯繫</span>
+          <strong id="statContact">0</strong>
+        </div>
+
+        <div>
+          <span>配送中</span>
+          <strong id="statDelivery">0</strong>
+        </div>
+
+        <div>
+          <span>已完成</span>
+          <strong id="statDone">0</strong>
+        </div>
       </section>
 
       <section class="toolbar">
