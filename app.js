@@ -5,6 +5,12 @@ const API_URL = config.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/
 const SUPABASE_URL = config.SUPABASE_URL;
 const SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY;
 
+console.log('[省好多後台] config loaded:', {
+  hasGoogleScript: Boolean(API_URL),
+  hasSupabaseUrl: Boolean(SUPABASE_URL),
+  hasSupabaseKey: Boolean(SUPABASE_ANON_KEY)
+});
+
 const state = {
   token: localStorage.getItem('shd_admin_token') || '',
   user: JSON.parse(localStorage.getItem('shd_admin_user') || 'null'),
@@ -55,7 +61,7 @@ async function apiPost(payload) {
 
 async function supabaseRequest(path, options = {}) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('尚未設定 Supabase 連線資料');
+    throw new Error('尚未設定 Supabase 連線資料，請確認 admin.html 已先載入 /js/config.js');
   }
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -353,6 +359,9 @@ function orderCard(order) {
         ${itemsHtml || '<div class="empty">沒有商品資料</div>'}
       </div>
 
+              ${itemsHtml || '<div class="empty">沒有商品資料</div>'}
+      </div>
+
       <div class="total">
         <span>總金額</span>
         <strong>${money(order.finalAmount || order.total)}</strong>
@@ -393,7 +402,7 @@ async function updateStatus(orderId, status) {
 
 async function loadProductsAdmin() {
   try {
-    $('ordersGrid').innerHTML = '<div class="empty">商品載入中...</div>';
+    $('ordersGrid').innerHTML = '<div class="empty">正在從 Supabase 載入商品...</div>';
 
     const rows = await supabaseRequest(
       'products?select=*&order=sort.asc,name.asc'
@@ -436,6 +445,7 @@ function renderProductsAdmin() {
         <input id="productPrice" type="number" placeholder="售價" />
         <input id="productCost" type="number" placeholder="成本，可空白" />
         <input id="productStock" type="number" placeholder="庫存，預設 999" />
+        <input id="productSort" type="number" placeholder="排序，數字越小越前面，預設 9999" />
         <input id="productUnit" placeholder="單位，例如 包、瓶、組" />
         <input id="productBarcode" placeholder="條碼，可空白" />
         <input id="productTags" placeholder="標籤，例如 熱賣,補貨" />
@@ -444,8 +454,8 @@ function renderProductsAdmin() {
         <input id="productImageUrl" placeholder="圖片網址，可貼圖鴨或上傳後自動填入" />
 
         <label style="font-weight:900;">
-          商品圖片：可從手機相簿選擇或直接拍照
-          <input id="productImageFile" type="file" accept="image/*" style="margin-top:8px;" />
+          商品圖片：手機可從相簿選擇，也可直接拍照
+          <input id="productImageFile" type="file" accept="image/*" capture="environment" style="margin-top:8px;" />
         </label>
 
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
@@ -480,7 +490,7 @@ function renderProductsAdmin() {
       </div>
 
       <p style="color:#82736a;font-size:14px;">
-        共 ${products.length} 件商品。圖片目前支援貼網址，也支援手機上傳到 Supabase Storage。
+        共 ${products.length} 件商品。商品資料與圖片上傳已連接 Supabase。
       </p>
 
       <div class="product-admin-list">
@@ -545,6 +555,7 @@ function fillProductForm(p) {
   $('productPrice').value = p.price || '';
   $('productCost').value = p.cost || '';
   $('productStock').value = p.stock ?? 999;
+  $('productSort').value = p.sort ?? 9999;
   $('productUnit').value = p.unit || '';
   $('productBarcode').value = p.barcode || '';
   $('productTags').value = p.tags || '';
@@ -568,6 +579,7 @@ function getProductFormData() {
     price: Number($('productPrice').value || 0),
     cost: Number($('productCost').value || 0),
     stock: Number($('productStock').value || 999),
+    sort: Number($('productSort').value || 9999),
     unit: $('productUnit').value.trim(),
     barcode: $('productBarcode').value.trim(),
     tags: $('productTags').value.trim(),
@@ -593,7 +605,10 @@ async function saveProduct() {
     if (!product.price) throw new Error('請輸入售價');
 
     if (file) {
+      btn.textContent = '圖片上傳中...';
       product.image = await uploadProductImage(file);
+      $('productImageUrl').value = product.image;
+      btn.textContent = '商品儲存中...';
     }
 
     if (state.editingProductId) {
@@ -623,8 +638,10 @@ async function saveProduct() {
   } catch (err) {
     toast(err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = state.editingProductId ? '儲存修改' : '新增商品';
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = state.editingProductId ? '儲存修改' : '新增商品';
+    }
   }
 }
 
