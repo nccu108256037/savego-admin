@@ -1,14 +1,22 @@
-const API_URL = 'https://script.google.com/macros/s/AKfycbxRkOVGRD_7RptPkfiZOkKaCI12rh9B51dSEdJ2Lcgob_Z71X5FYdnfQ9hSqFVZGmvs/exec';
+const config = window.SHENG_HAO_DUO_CONFIG || {};
+
+const API_URL = config.GOOGLE_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbxRkOVGRD_7RptPkfiZOkKaCI12rh9B51dSEdJ2Lcgob_Z71X5FYdnfQ9hSqFVZGmvs/exec';
+
+const SUPABASE_URL = config.SUPABASE_URL;
+const SUPABASE_ANON_KEY = config.SUPABASE_ANON_KEY;
 
 const state = {
   token: localStorage.getItem('shd_admin_token') || '',
   user: JSON.parse(localStorage.getItem('shd_admin_user') || 'null'),
   orders: [],
+  products: [],
   ambassadors: [],
   referralSummary: [],
   status: '全部',
   keyword: '',
-  tab: 'orders'
+  productKeyword: '',
+  tab: 'orders',
+  editingProductId: ''
 };
 
 const $ = (id) => document.getElementById(id);
@@ -21,6 +29,10 @@ function toast(message) {
   el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 1800);
 }
+
+/* =========================
+   Apps Script API
+========================= */
 
 async function apiPost(payload) {
   const res = await fetch(API_URL, {
@@ -36,6 +48,66 @@ async function apiPost(payload) {
 
   return data;
 }
+
+/* =========================
+   Supabase API
+========================= */
+
+async function supabaseRequest(path, options = {}) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('尚未設定 Supabase 連線資料');
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+      ...(options.headers || {})
+    }
+  });
+
+  const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(text || 'Supabase 操作失敗');
+  }
+
+  return text ? JSON.parse(text) : null;
+}
+
+async function uploadProductImage(file) {
+  if (!file) return '';
+
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const fileName = `product-${Date.now()}-${Math.floor(Math.random() * 10000)}.${ext}`;
+  const path = `products/${fileName}`;
+
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/product-images/${path}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      'Content-Type': file.type || 'image/jpeg',
+      'x-upsert': 'true'
+    },
+    body: file
+  });
+
+  const text = await res.text();
+
+  if (!res.ok) {
+    throw new Error(text || '圖片上傳失敗');
+  }
+
+  return `${SUPABASE_URL}/storage/v1/object/public/product-images/${path}`;
+}
+
+/* =========================
+   Login
+========================= */
 
 function showAdmin() {
   $('loginPage').classList.add('hidden');
@@ -80,6 +152,18 @@ async function login() {
   }
 }
 
+function logout() {
+  localStorage.removeItem('shd_admin_token');
+  localStorage.removeItem('shd_admin_user');
+  state.token = '';
+  state.user = null;
+  showLogin();
+}
+
+/* =========================
+   Tabs
+========================= */
+
 function ensureAdminTabs() {
   if ($('adminTabs')) return;
 
@@ -89,6 +173,7 @@ function ensureAdminTabs() {
 
   tabHtml.innerHTML = `
     <button class="admin-tab active" data-tab="orders">訂單管理</button>
+    <button class="admin-tab" data-tab="products">商品管理</button>
     <button class="admin-tab" data-tab="ambassadors">分享家管理</button>
     <button class="admin-tab" data-tab="summary">分享業績</button>
   `;
@@ -130,6 +215,11 @@ function switchTab(tab) {
     loadOrders();
   }
 
+  if (tab === 'products') {
+    setOrderToolsVisible(false);
+    loadProductsAdmin();
+  }
+
   if (tab === 'ambassadors') {
     setOrderToolsVisible(false);
     loadAmbassadors();
@@ -140,6 +230,10 @@ function switchTab(tab) {
     loadReferralSummary();
   }
 }
+
+/* =========================
+   Orders
+========================= */
 
 async function loadOrders() {
   try {
@@ -293,6 +387,282 @@ async function updateStatus(orderId, status) {
   }
 }
 
+/* =========================
+   Products Admin
+========================= */
+
+async function loadProductsAdmin() {
+  try {
+    $('ordersGrid').innerHTML = '<div class="empty">商品載入中...</div>';
+
+    const rows = await supabaseRequest(
+      'products?select=*&order=sort.asc,name.asc'
+    );
+
+    state.products = rows || [];
+    renderProductsAdmin();
+  } catch (err) {
+    $('ordersGrid').innerHTML = `<div class="empty">${err.message}</div>`;
+  }
+}
+
+function getFilteredProductsAdmin() {
+  const kw = state.productKeyword.toLowerCase();
+
+  return state.products.filter(p => {
+    const text = [
+      p.id,
+      p.name,
+      p.category,
+      p.tags,
+      p.barcode
+    ].join(' ').toLowerCase();
+
+    return !kw || text.includes(kw);
+  });
+}
+
+function renderProductsAdmin() {
+  const products = getFilteredProductsAdmin();
+
+  $('ordersGrid').innerHTML = `
+    <div class="admin-card">
+      <h2>${state.editingProductId ? '修改商品' : '新增商品'}</h2>
+
+      <div class="admin-form">
+        <input id="productId" placeholder="商品編號，可空白自動產生" />
+        <input id="productName" placeholder="商品名稱" />
+        <input id="productCategory" placeholder="分類，例如 清潔用品" />
+        <input id="productPrice" type="number" placeholder="售價" />
+        <input id="productCost" type="number" placeholder="成本，可空白" />
+        <input id="productStock" type="number" placeholder="庫存，預設 999" />
+        <input id="productUnit" placeholder="單位，例如 包、瓶、組" />
+        <input id="productBarcode" placeholder="條碼，可空白" />
+        <input id="productTags" placeholder="標籤，例如 熱賣,補貨" />
+        <textarea id="productDescription" rows="3" placeholder="商品描述，可空白"></textarea>
+
+        <input id="productImageUrl" placeholder="圖片網址，可貼圖鴨或上傳後自動填入" />
+
+        <label style="font-weight:900;">
+          商品圖片：可從手機相簿選擇或直接拍照
+          <input id="productImageFile" type="file" accept="image/*" style="margin-top:8px;" />
+        </label>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <label>
+            <input id="productFeatured" type="checkbox" />
+            設為熱門
+          </label>
+
+          <label>
+            <input id="productVisible" type="checkbox" checked />
+            上架顯示
+          </label>
+        </div>
+
+        <button id="saveProductBtn">
+          ${state.editingProductId ? '儲存修改' : '新增商品'}
+        </button>
+
+        ${
+          state.editingProductId
+            ? '<button id="cancelEditProductBtn" class="small-btn">取消修改</button>'
+            : ''
+        }
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h2>商品清單</h2>
+
+      <div class="admin-form">
+        <input id="productSearchInput" placeholder="搜尋商品名稱、分類、標籤、條碼" value="${state.productKeyword || ''}" />
+      </div>
+
+      <p style="color:#82736a;font-size:14px;">
+        共 ${products.length} 件商品。圖片目前支援貼網址，也支援手機上傳到 Supabase Storage。
+      </p>
+
+      <div class="product-admin-list">
+        ${products.length ? products.map(productAdminCard).join('') : '<div class="empty">尚無商品</div>'}
+      </div>
+    </div>
+  `;
+
+  if (state.editingProductId) {
+    fillProductForm(state.products.find(p => p.id === state.editingProductId));
+  }
+}
+
+function productAdminCard(p) {
+  return `
+    <article class="order-card">
+      <div style="display:grid;grid-template-columns:72px 1fr;gap:12px;align-items:start;">
+        <img
+          src="${p.image || 'https://placehold.co/300x300/FFF3E8/EC7F32?text=SHD'}"
+          style="width:72px;height:72px;object-fit:contain;border-radius:14px;background:#fff3e8;"
+          onerror="this.src='https://placehold.co/300x300/FFF3E8/EC7F32?text=SHD'"
+        />
+
+        <div>
+          <div style="display:flex;justify-content:space-between;gap:10px;">
+            <strong>${p.name || '-'}</strong>
+            <strong>${money(p.price || 0)}</strong>
+          </div>
+
+          <div style="font-size:13px;color:#82736a;margin-top:4px;">
+            ${p.id || '-'}｜${p.category || '其他'}｜庫存 ${p.stock ?? 0}
+          </div>
+
+          <div style="font-size:13px;color:#82736a;margin-top:4px;">
+            ${p.is_visible ? '✅ 上架' : '⛔ 下架'}
+            ${p.is_featured ? '｜🔥 熱門' : ''}
+          </div>
+
+          <div class="actions" style="margin-top:10px;">
+            <button data-edit-product="${p.id}">修改</button>
+            <button data-toggle-visible="${p.id}" data-visible="${p.is_visible ? 'false' : 'true'}">
+              ${p.is_visible ? '下架' : '上架'}
+            </button>
+            <button data-toggle-featured="${p.id}" data-featured="${p.is_featured ? 'false' : 'true'}">
+              ${p.is_featured ? '取消熱門' : '設熱門'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function fillProductForm(p) {
+  if (!p) return;
+
+  $('productId').value = p.id || '';
+  $('productId').disabled = true;
+
+  $('productName').value = p.name || '';
+  $('productCategory').value = p.category || '';
+  $('productPrice').value = p.price || '';
+  $('productCost').value = p.cost || '';
+  $('productStock').value = p.stock ?? 999;
+  $('productUnit').value = p.unit || '';
+  $('productBarcode').value = p.barcode || '';
+  $('productTags').value = p.tags || '';
+  $('productDescription').value = p.description || '';
+  $('productImageUrl').value = p.image || '';
+  $('productFeatured').checked = Boolean(p.is_featured);
+  $('productVisible').checked = Boolean(p.is_visible);
+}
+
+function getProductFormData() {
+  let id = $('productId').value.trim();
+
+  if (!id) {
+    id = 'p' + Date.now();
+  }
+
+  return {
+    id,
+    name: $('productName').value.trim(),
+    category: $('productCategory').value.trim() || '其他',
+    price: Number($('productPrice').value || 0),
+    cost: Number($('productCost').value || 0),
+    stock: Number($('productStock').value || 999),
+    unit: $('productUnit').value.trim(),
+    barcode: $('productBarcode').value.trim(),
+    tags: $('productTags').value.trim(),
+    description: $('productDescription').value.trim(),
+    image: $('productImageUrl').value.trim(),
+    is_featured: $('productFeatured').checked,
+    is_visible: $('productVisible').checked,
+    updated_at: new Date().toISOString()
+  };
+}
+
+async function saveProduct() {
+  const btn = $('saveProductBtn');
+  const file = $('productImageFile')?.files?.[0];
+
+  try {
+    btn.disabled = true;
+    btn.textContent = '儲存中...';
+
+    const product = getProductFormData();
+
+    if (!product.name) throw new Error('請輸入商品名稱');
+    if (!product.price) throw new Error('請輸入售價');
+
+    if (file) {
+      product.image = await uploadProductImage(file);
+    }
+
+    if (state.editingProductId) {
+      await supabaseRequest(
+        `products?id=eq.${encodeURIComponent(state.editingProductId)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(product)
+        }
+      );
+
+      toast('商品已修改');
+    } else {
+      product.created_at = new Date().toISOString();
+
+      await supabaseRequest('products', {
+        method: 'POST',
+        body: JSON.stringify(product)
+      });
+
+      toast('商品已新增');
+    }
+
+    state.editingProductId = '';
+    await loadProductsAdmin();
+
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = state.editingProductId ? '儲存修改' : '新增商品';
+  }
+}
+
+function editProduct(productId) {
+  state.editingProductId = productId;
+  renderProductsAdmin();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function toggleProductField(productId, field, value) {
+  try {
+    await supabaseRequest(
+      `products?id=eq.${encodeURIComponent(productId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          [field]: value,
+          updated_at: new Date().toISOString()
+        })
+      }
+    );
+
+    toast('商品已更新');
+    await loadProductsAdmin();
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+function cancelEditProduct() {
+  state.editingProductId = '';
+  renderProductsAdmin();
+}
+
+/* =========================
+   Ambassadors
+========================= */
+
 async function loadAmbassadors() {
   try {
     const data = await apiPost({
@@ -348,10 +718,6 @@ function renderAmbassadors() {
         <input id="ambReward" placeholder="回饋比例，預設 0.01" />
         <button id="createAmbBtn">新增分享家</button>
       </div>
-
-      <p style="color:#82736a;font-size:14px;">
-        新增後會自動建立 share 編號，並自動產生英文推薦碼，例如 XR52、XF31、AM84。
-      </p>
     </div>
 
     <div class="admin-card">
@@ -382,15 +748,8 @@ async function createAmbassador() {
   const phone = $('ambPhone').value.trim();
   const rewardRate = $('ambReward').value.trim() || '0.01';
 
-  if (!name) {
-    toast('請輸入分享家姓名');
-    return;
-  }
-
-  if (!phone) {
-    toast('請輸入電話');
-    return;
-  }
+  if (!name) return toast('請輸入分享家姓名');
+  if (!phone) return toast('請輸入電話');
 
   try {
     const data = await apiPost({
@@ -428,6 +787,10 @@ async function updateAmbassadorStatus(ambassadorCode, active) {
     toast(err.message);
   }
 }
+
+/* =========================
+   Referral Summary
+========================= */
 
 async function loadReferralSummary() {
   try {
@@ -506,13 +869,9 @@ function renderReferralSummary() {
   `;
 }
 
-function logout() {
-  localStorage.removeItem('shd_admin_token');
-  localStorage.removeItem('shd_admin_user');
-  state.token = '';
-  state.user = null;
-  showLogin();
-}
+/* =========================
+   Events
+========================= */
 
 function bindEvents() {
   $('loginBtn').addEventListener('click', login);
@@ -523,6 +882,7 @@ function bindEvents() {
 
   $('refreshBtn').addEventListener('click', () => {
     if (state.tab === 'orders') loadOrders();
+    if (state.tab === 'products') loadProductsAdmin();
     if (state.tab === 'ambassadors') loadAmbassadors();
     if (state.tab === 'summary') loadReferralSummary();
   });
@@ -534,10 +894,53 @@ function bindEvents() {
     if (state.tab === 'orders') renderOrders();
   });
 
+  document.body.addEventListener('input', e => {
+    if (e.target.id === 'productSearchInput') {
+      state.productKeyword = e.target.value;
+      renderProductsAdmin();
+    }
+  });
+
   document.body.addEventListener('click', e => {
     const tab = e.target.dataset.tab;
     if (tab) {
       switchTab(tab);
+      return;
+    }
+
+    if (e.target.id === 'saveProductBtn') {
+      saveProduct();
+      return;
+    }
+
+    if (e.target.id === 'cancelEditProductBtn') {
+      cancelEditProduct();
+      return;
+    }
+
+    const editProductId = e.target.dataset.editProduct;
+    if (editProductId) {
+      editProduct(editProductId);
+      return;
+    }
+
+    const visibleProductId = e.target.dataset.toggleVisible;
+    if (visibleProductId) {
+      toggleProductField(
+        visibleProductId,
+        'is_visible',
+        e.target.dataset.visible === 'true'
+      );
+      return;
+    }
+
+    const featuredProductId = e.target.dataset.toggleFeatured;
+    if (featuredProductId) {
+      toggleProductField(
+        featuredProductId,
+        'is_featured',
+        e.target.dataset.featured === 'true'
+      );
       return;
     }
 
