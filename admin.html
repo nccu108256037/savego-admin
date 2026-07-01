@@ -1,1 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+  <title>省好多後台｜ASTREA Admin v2</title>
+
+  <link rel="stylesheet" href="admin.css" />
+
+  <script>
+    window.ASTREA_ADMIN_CONFIG = {
+      SUPABASE_URL: "https://kkflpbeouhqxatmvsuqj.supabase.co",
+      SUPABASE_ANON_KEY: "sb_publishable_cXcPTCsDOdeOriHcNqxNLQ_n1bsy9xw",
+      APP_NAME: "省好多商城",
+      BRAND_NAME: "ASTREA Admin"
+    };
+  </script>
+</head>
+
+<body>
+  <div id="app" class="admin-shell">
+
+    <aside id="sidebar" class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">省</div>
+        <div>
+          <strong>省好多</strong>
+          <span>ASTREA Admin v2</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <button class="nav-item active" data-page="dashboard">🏠 儀表板</button>
+        <button class="nav-item" data-page="orders">📦 訂單管理</button>
+        <button class="nav-item" data-page="products">🛒 商品管理</button>
+        <button class="nav-item" data-page="quickAdd">⚡ 快速上架</button>
+        <button class="nav-item" data-page="customers">👥 客戶管理</button>
+        <button class="nav-item" data-page="referrers">🤝 分享家</button>
+        <button class="nav-item" data-page="codes">🎁 推薦碼</button>
+        <button class="nav-item" data-page="rewards">💰 回饋金</button>
+        <button class="nav-item" data-page="delivery">🚚 配送管理</button>
+        <button class="nav-item" data-page="reports">📈 報表分析</button>
+        <button class="nav-item" data-page="settings">⚙️ 系統設定</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="logoutBtn" class="ghost-btn">登出後台</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="menuBtn" class="icon-btn mobile-only">☰</button>
+
+        <div>
+          <p class="eyebrow">省好多商城</p>
+          <h1 id="pageTitle">儀表板</h1>
+        </div>
+
+        <div class="top-actions">
+          <input id="globalSearch" class="search-input" placeholder="搜尋訂單、商品、客戶..." />
+          <button id="refreshBtn" class="primary-soft-btn">重新整理</button>
+        </div>
+      </header>
+
+      <section id="pageContent" class="page-content"></section>
+    </main>
+
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
