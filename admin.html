@@ -290,20 +290,31 @@ const DB = {
   }
 };
 
+async function safeSelect(label, table, params) {
+  try {
+    const rows = await DB.select(table, params);
+    return Array.isArray(rows) ? rows : [];
+  } catch (err) {
+    console.error(`${label} 載入失敗：`, err);
+    toast(`${label} 載入失敗：${err.message}`, "error");
+    return [];
+  }
+}
+
 async function loadAllData() {
   const [products, orders, orderItems, customers, referrers] = await Promise.all([
-    DB.select(TABLES.products, "select=*&order=sort.asc.nullslast,name.asc"),
-    DB.select(TABLES.orders, "select=*&order=created_at.desc"),
-    DB.select(TABLES.orderItems, "select=*&order=created_at.asc"),
-    DB.select(TABLES.customers, "select=*&order=created_at.desc"),
-    DB.select(TABLES.referrers, "select=*&order=created_at.desc")
+    safeSelect("商品", TABLES.products, "select=*&order=sort.asc.nullslast,name.asc"),
+    safeSelect("訂單", TABLES.orders, "select=*&order=created_at.desc"),
+    safeSelect("訂單明細", TABLES.orderItems, "select=*&order=created_at.asc"),
+    safeSelect("客戶", TABLES.customers, "select=*&order=created_at.desc"),
+    safeSelect("分享家", TABLES.referrers, "select=*&order=created_at.desc")
   ]);
 
-  APP.products = Array.isArray(products) ? products : [];
-  APP.orders = Array.isArray(orders) ? orders : [];
-  APP.orderItems = Array.isArray(orderItems) ? orderItems : [];
-  APP.customers = Array.isArray(customers) ? customers : [];
-  APP.referrers = Array.isArray(referrers) ? referrers : [];
+  APP.products = products;
+  APP.orders = orders;
+  APP.orderItems = orderItems;
+  APP.customers = customers;
+  APP.referrers = referrers;
 }
 
 async function reloadDataAndRender(message = "") {
